@@ -5,34 +5,117 @@ import finnhubService from '../services/finnhub.js';
 const router = express.Router();
 
 router.get('/', async (req, res) => {
-  const positions = await db.allAsync(`SELECT id, symbol, quantity, entry_price, current_price, (quantity * current_price) as value, ((current_price - entry_price) * quantity) as gain, (((current_price - entry_price) / entry_price) * 100) as gain_pct, last_updated FROM portfolios ORDER BY added_date DESC`);
+  const positions = await new Promise((resolve, reject) => {
+    db.all(`SELECT id, symbol, quantity, entry_price, current_price, 
+            (quantity * current_price) as current_value, 
+            ((current_price - entry_price) * quantity) as gain_loss,
+            (((current_price - entry_price) / entry_price) * 100) as gain_loss_percent 
+            FROM portfolios`, 
+      (err, rows) => {
+        if (err) reject(err);
+        else resolve(rows || []);
+      }
+    );
+  });
   res.json(positions);
 });
 
 router.get('/summary', async (req, res) => {
-  const s = await db.getAsync('SELECT SUM(quantity * current_price) as total_value, SUM((current_price - entry_price) * quantity) as total_gain, MAX(last_updated) as last_updated FROM portfolios WHERE current_price IS NOT NULL');
-  const inv = (await db.getAsync('SELECT SUM(quantity * entry_price) as invested FROM portfolios')).invested || 0;
-  res.json({total_value: s.total_value || 0, total_gain: s.total_gain || 0, total_gain_pct: inv > 0 ? (s.total_gain/inv)*100 : 0, last_updated: s.last_updated});
+  const summary = await new Promise((resolve, reject) => {
+    db.get(`SELECT 
+            SUM(quantity * current_price) as total_value, 
+            SUM((current_price - entry_price) * quantity) as total_gain
+            FROM portfolios`,
+      (err, row) => {
+        if (err) reject(err);
+        else resolve(row || {total_value: 0, total_gain: 0});
+      }
+    );
+  });
+  
+  const inv = await new Promise((resolve, reject) => {
+    db.get('SELECT SUM(quantity * entry_price) as invested FROM portfolios', 
+      (err, row) => {
+        if (err) reject(err);
+        else resolve(row);
+      }
+    );
+  });
+  
+  const totalGainPct = inv && inv.invested > 0 ? (summary.total_gain / inv.invested) * 100 : 0;
+  
+  res.json({
+    total_value: summary.total_value || 0, 
+    total_gain: summary.total_gain || 0, 
+    total_gain_pct: totalGainPct,
+    last_updated: new Date()
+  });
 });
 
 router.post('/add', async (req, res) => {
   const {symbol, quantity, entry_price} = req.body;
-  if (!symbol || !quantity || !entry_price) return res.status(400).json({error: 'Missing fields'});
+  
+  if (!symbol || !quantity || !entry_price) {
+    return res.status(400).json({error: 'Missing fields'});
+  }
+  
   let current_price = entry_price;
-  try { current_price = (await finnhubService.getQuote(symbol.toUpperCase())).price; } catch(e) {}
+  
   try {
-    const result = await db.runAsync('INSERT INTO portfolios (symbol, quantity, entry_price, current_price) VALUES (?, ?, ?, ?)', [symbol.toUpperCase(), parseFloat(quantity), parseFloat(entry_price), current_price]);
-    res.status(201).json({id: result.lastID, symbol: symbol.toUpperCase(), quantity, entry_price, current_price});
+    const quote = await finnhubService.getQuote(symbol.toUpperCase());
+    if (quote && quote.c) {
+      current_price = quote.c;
+    }
   } catch(e) {
-    if (e.message.includes('UNIQUE')) return res.status(409).json({error: 'Symbol already exists'});
+    console.log('Could not fetch price for', symbol);
+  }
+  
+  try {
+    await new Promise((resolve, reject) => {
+      db.run('INSERT INTO portfolios (symbol, quantity, entry_price, current_price) VALUES (?, ?, ?, ?)',
+        [symbol.toUpperCase(), quantity, entry_price, current_price],
+        function(err) {
+          if (err) {
+            if (err.message.includes('UNIQUE')) {
+              reject(new Error('Symbol already exists'));
+            } else {
+              reject(err);
+            }
+          } else {
+            resolve(this.lastID);
+          }
+        }
+      );
+    });
+    
+    const asset = await new Promise((resolve, reject) => {
+      db.get('SELECT * FROM portfolios WHERE symbol = ?', [symbol.toUpperCase()],
+        (err, row) => {
+          if (err) reject(err);
+          else resolve(row);
+        }
+      );
+    });
+    
+    res.status(201).json(asset);
+  } catch(e) {
+    if (e.message === 'Symbol already exists') {
+      return res.status(409).json({error: 'Symbol already exists'});
+    }
     res.status(500).json({error: e.message});
   }
 });
 
 router.delete('/:id', async (req, res) => {
-  const result = await db.runAsync('DELETE FROM portfolios WHERE id = ?', [req.params.id]);
-  if (!result.changes) return res.status(404).json({error: 'Not found'});
-  res.json({message: 'Deleted', id: parseInt(req.params.id)});
+  await new Promise((resolve, reject) => {
+    db.run('DELETE FROM portfolios WHERE id = ?', [req.params.id],
+      function(err) {
+        if (err) reject(err);
+        else resolve(this.changes);
+      }
+    );
+  });
+  res.json({message: 'Deleted'});
 });
 
 export default router;
