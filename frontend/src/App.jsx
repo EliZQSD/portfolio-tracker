@@ -150,7 +150,7 @@ ${summary.totalGain.toFixed(2)}</div>
                 <tr key={asset.id} style={{borderBottom: '1px solid #f0f0f0'}}>
                   <td style={{padding: '15px', fontWeight: 'bold', color: '#667eea'}}>{asset.symbol}</td>
                   <td style={{padding: '15px', textAlign: 'right'}}>{asset.quantity}</td>
-                  <td style={{padding: '15px', textAlign: 'right'}}>${asset.buy_price.toFixed(2)}</td>
+                  <td style={{padding: '15px', textAlign: 'right'}}>${asset.entry_price.toFixed(2)}</td>
                   <td style={{padding: '15px', textAlign: 'right'}}>${asset.current_price?.toFixed(2) || '---'}</td>
                   <td style={{padding: '15px', textAlign: 'right', fontWeight: 'bold'}}>${asset.current_value.toFixed(2)}</td>
                   <td style={{padding: '15px', textAlign: 'right', fontWeight: 'bold', color: asset.gain_loss >= 0 ? '#38ef7d' : '#f45c43'}}>
