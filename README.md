@@ -77,6 +77,64 @@ npm start
 ```
 **DELETE `/api/portfolio/:id`** - Supprimer une position
 
+
+## 🔮 Ajouter les Prédictions (Fonctionnalité 2)
+
+Pour ajouter la fonctionnalité de prédictions avec analyse technique:
+
+```bash
+python add_predictions.py
+```
+
+Ce script va automatiquement:
+- ✅ Installer la dépendance axios
+- ✅ Créer predictionService.js avec les indicateurs RSI, MACD et SMA20
+- ✅ Créer les routes API pour les prédictions
+- ✅ Mettre à jour le serveur backend
+- ✅ Ajouter les fonctions frontend
+
+### 📊 Endpoints Prédictions Disponibles
+
+**GET** `/api/predictions/predict/:symbol` - Prédiction pour un actif spécifique
+
+**POST** `/api/predictions/predict-portfolio` - Prédictions pour tout le portefeuille
+```json
+{
+  "symbols": ["ENPH", "META", "MSFT", "SPUS"]
+}
+```
+
+### 📈 Indicateurs Techniques
+
+- **RSI (Relative Strength Index)**: Détecte les zones de surachat (>70) et survente (<30)
+- **MACD (Moving Average Convergence Divergence)**: Identifie les tendances haussières/baissières
+- **SMA20 (Simple Moving Average 20 jours)**: Moyenne mobile pour identifier le support/résistance
+
+### 🎯 Signaux de Trading
+
+- **BUY** 🟢: RSI < 30 (survente) + Prix > SMA20 (tendance haussière)
+- **SELL** 🔴: RSI > 70 (surachat) + Prix < SMA20 (tendance baissière)
+- **HOLD** 🟡: Conditions neutres, pas de signal clair
+
+### 📊 Format de Réponse
+
+```json
+{
+  "symbol": "ENPH",
+  "currentPrice": 95.50,
+  "predicted7d": 98.75,
+  "prediction": "BUY",
+  "confidence": 75,
+  "indicators": {
+    "rsi": "28.45",
+    "macd": "1.23",
+    "sma20": "92.30"
+  },
+  "timestamp": "2026-01-04T21:00:00.000Z"
+}
+```
+
+
 ## 🔜 Prochaines Itérations
 
 ### Itération 2: Prédictions 7 Jours
